@@ -1,0 +1,28 @@
+{
+  "blueprint_id": "BP_001_rev_A",
+  "project_id": "proj_001",
+  "revision": "A",
+  "date": "2024-01-01",
+  "assets": [
+    {
+      "id": "Wall_A",
+      "type": "Wall",
+      "material": "Concrete",
+      "quantity": 400,
+      "unit": "sqft",
+      "floor": "floor_3",
+      "dimensions": {
+        "length": 40,
+        "height": 10
+      }
+    },
+    {
+      "id": "Beam_B1",
+      "type": "Beam",
+      "material": "Steel",
+      "quantity": 50,
+      "unit": "linear_ft",
+      "floor": "floor_3"
+    }
+  ]
+}

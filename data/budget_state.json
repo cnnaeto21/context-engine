@@ -1,0 +1,20 @@
+{
+  "project_id": "proj_001",
+  "last_updated": "2024-01-20T10:30:00Z",
+  "line_items": [
+    {
+      "code": "B47",
+      "description": "Cast-in-Place Concrete",
+      "allocated": 50000.00,
+      "spent": 30000.00,
+      "pending_changes": []
+    },
+    {
+      "code": "B48",
+      "description": "Structural Steel Framing",
+      "allocated": 75000.00,
+      "spent": 45000.00,
+      "pending_changes": []
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "blueprint_id": "BP_001_rev_B",
+  "project_id": "proj_001",
+  "revision": "B",
+  "date": "2024-01-15",
+  "assets": [
+    {
+      "id": "Wall_A",
+      "type": "Wall",
+      "material": "Concrete",
+      "quantity": 500,
+      "unit": "sqft",
+      "floor": "floor_3",
+      "dimensions": {
+        "length": 50,
+        "height": 10
+      }
+    },
+    {
+      "id": "Beam_B1",
+      "type": "Beam",
+      "material": "Steel",
+      "quantity": 50,
+      "unit": "linear_ft",
+      "floor": "floor_3"
+    },
+    {
+      "id": "HVAC_Unit_1",
+      "type": "HVAC",
+      "material": "Commercial_AC",
+      "quantity": 1,
+      "unit": "unit",
+      "floor": "floor_3"
+    }
+  ]
+}

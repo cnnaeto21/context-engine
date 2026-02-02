@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:latest
+    container_name: context-engine-neo4j
+    ports:
+      - "7474:7474"  # Neo4j Browser
+      - "7687:7687"  # Bolt protocol
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-contextengine123}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+      - ./neo4j/init_schema.cypher:/var/lib/neo4j/import/init_schema.cypher
+      - ./neo4j/sample_data.cypher:/var/lib/neo4j/import/sample_data.cypher
+    networks:
+      - context-engine-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  context-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: context-engine-app
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-contextengine123}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MOCK_MODE=${MOCK_MODE:-true}
+      - BUDGET_API_FILE=/app/data/budget_state.json
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./tests:/app/tests
+    working_dir: /app
+    networks:
+      - context-engine-network
+    command: python -m pytest tests/ -v
+    # For development, you can override with: docker-compose run context-engine bash
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+
+networks:
+  context-engine-network:
+    driver: bridge
