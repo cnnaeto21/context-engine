@@ -52,7 +52,7 @@ def test_blueprint_parser():
     """Test blueprint parsing functionality."""
     from src.ingestion.parser import BlueprintParser
 
-    parser = BlueprintParser(mock_mode=True)
+    parser = BlueprintParser(parser_service="mock")
 
     base_path = Path(__file__).parent.parent
     before_path = base_path / 'data' / 'mock_blueprints' / 'before.json'
@@ -73,7 +73,7 @@ def test_blueprint_comparison():
     """Test comparing before and after blueprints."""
     from src.ingestion.parser import BlueprintParser
 
-    parser = BlueprintParser(mock_mode=True)
+    parser = BlueprintParser(parser_service="mock")
 
     base_path = Path(__file__).parent.parent
     before_path = base_path / 'data' / 'mock_blueprints' / 'before.json'

@@ -59,8 +59,8 @@ class MockBudgetAPI:
         self.budget_file = Path(budget_file_path)
         logger.info(f"MockBudgetAPI initialized with file: {budget_file_path}")
 
-        # Create file with default structure if it doesn't exist
-        if not self.budget_file.exists():
+        # Create file with default structure if it doesn't exist or is empty
+        if not self.budget_file.exists() or self.budget_file.stat().st_size == 0:
             self._create_default_budget()
 
     def _create_default_budget(self) -> None:

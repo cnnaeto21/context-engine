@@ -30,6 +30,37 @@ services:
       retries: 5
       start_period: 40s
 
+  dolphin:
+    build:
+      context: ./dolphin
+      dockerfile: Dockerfile
+    container_name: context-engine-dolphin
+    ports:
+      - "8001:8001"  # Dolphin FastAPI inference service
+    environment:
+      - DOLPHIN_DEVICE=${DOLPHIN_DEVICE:-cpu}
+      - DOLPHIN_MODEL_PATH=/app/models/dolphin-v2
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./models:/app/models  # Mount model directory
+      - ./data/uploads:/app/uploads  # Upload directory for PDFs/images
+    networks:
+      - context-engine-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Optional: Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
   context-engine:
     build:
       context: .
@@ -38,6 +69,8 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+      dolphin:
+        condition: service_healthy
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER:-neo4j}
@@ -45,7 +78,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MOCK_MODE=${MOCK_MODE:-true}
+      - PARSER_SERVICE=${PARSER_SERVICE:-mock}
+      - DOLPHIN_API_URL=http://dolphin:8001
       - BUDGET_API_FILE=/app/data/budget_state.json
     volumes:
       - ./src:/app/src

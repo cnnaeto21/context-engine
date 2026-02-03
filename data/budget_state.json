@@ -1,19 +1,48 @@
 {
   "project_id": "proj_001",
-  "last_updated": "2024-01-20T10:30:00Z",
+  "last_updated": "2026-02-03T07:57:37.051367",
   "line_items": [
     {
       "code": "B47",
       "description": "Cast-in-Place Concrete",
-      "allocated": 50000.00,
-      "spent": 30000.00,
-      "pending_changes": []
+      "allocated": 50000.0,
+      "spent": 30000.0,
+      "pending_changes": [
+        {
+          "asset_id": "Wall_A",
+          "delta": 1000.0,
+          "status": "pending_approval",
+          "timestamp": "2026-02-02T11:18:06.981420",
+          "reasoning": "While the $1,000 cost increase is well within the remaining $20,000 budget, it exceeds the $500 threshold requiring human approval per business rules. The change appears legitimate - increasing concrete quantity by 100 units for the same Wall_A asset with consistent material and vendor. However, confidence is slightly below the 0.85 auto-approval threshold due to the unknown last update timestamp, which creates uncertainty about data currency. Human review is recommended to verify the change validity and approve the budget adjustment."
+        },
+        {
+          "asset_id": "Wall_A",
+          "delta": 1000.0,
+          "status": "pending_approval",
+          "timestamp": "2026-02-03T07:49:55.209370",
+          "reasoning": "The $1,000 cost increase exceeds the $500 threshold requiring human approval per business rules. While the data quality is high (extraction confidence 0.93) and sufficient budget exists ($20,000 remaining vs $1,000 needed), the 25% quantity increase represents a significant scope change that warrants human review. The change appears legitimate and feasible, but the established approval threshold ensures proper oversight for material cost increases of this magnitude."
+        },
+        {
+          "asset_id": "Wall_A",
+          "delta": 1000.0,
+          "status": "pending_approval",
+          "timestamp": "2026-02-03T07:50:42.675494",
+          "reasoning": "Flagging for human approval due to $1,000 cost impact exceeding the $500 auto-approval threshold per business rules. However, this appears to be a straightforward change: sufficient budget exists ($20,000 remaining vs $1,000 needed), the 25% quantity increase is reasonable for construction modifications, and data quality is excellent (0.93 extraction confidence, High trustworthiness). The high confidence score reflects strong data quality and clear business logic, but human review is mandated by policy."
+        },
+        {
+          "asset_id": "Wall_A",
+          "delta": 1000.0,
+          "status": "pending_approval",
+          "timestamp": "2026-02-03T07:57:37.051306",
+          "reasoning": "The $1,000 cost increase exceeds the $500 auto-approval threshold, requiring human approval per business rules. However, this is a low-risk change: sufficient budget exists ($20,000 remaining vs $1,000 needed), the material remains consistent (concrete), and data quality is high (0.93 extraction confidence). The change represents a typical construction modification (100 sqft wall expansion) that should be easily approved by human review. My confidence combines high extraction confidence (0.93) with strong business logic assessment, resulting in 0.90 overall confidence in this recommendation."
+        }
+      ]
     },
     {
       "code": "B48",
       "description": "Structural Steel Framing",
-      "allocated": 75000.00,
-      "spent": 45000.00,
+      "allocated": 75000.0,
+      "spent": 45000.0,
       "pending_changes": []
     }
   ]

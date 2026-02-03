@@ -42,7 +42,9 @@ class BriefcaseAssembler:
     def assemble_asset_change(
         self,
         delta: Dict[str, Any],
-        project_context: Optional[Dict[str, Any]] = None
+        project_context: Optional[Dict[str, Any]] = None,
+        extraction_confidence: Optional[float] = None,
+        parser_source: str = "mock"
     ) -> str:
         """
         Assemble briefcase for an asset quantity/material change.
@@ -50,6 +52,8 @@ class BriefcaseAssembler:
         Args:
             delta: Delta information from StateQueries.calculate_delta()
             project_context: Optional additional project context
+            extraction_confidence: Optional extraction confidence from parser (0.0-1.0)
+            parser_source: Parser used ("mock" or "dolphin")
 
         Returns:
             Formatted prompt string for Claude
@@ -58,12 +62,17 @@ class BriefcaseAssembler:
 
         if not delta.get('exists'):
             # Asset doesn't exist - treat as new asset
-            return self.assemble_new_asset(delta, project_context)
+            return self.assemble_new_asset(delta, project_context, extraction_confidence, parser_source)
 
         # Extract data from delta
         obj_data = delta
         lineitem = delta.get('lineitem', {}) or {}
         vendor = delta.get('vendor', {}) or {}
+
+        # Calculate data trustworthiness
+        if extraction_confidence is None:
+            extraction_confidence = 1.0  # Mock data is considered 100% confident
+        data_trustworthiness = self._calculate_trustworthiness(extraction_confidence)
 
         # Prepare template variables
         template_vars = {
@@ -88,7 +97,10 @@ class BriefcaseAssembler:
             'contingency': lineitem.get('contingency', 0),
             'approval_threshold': self.approval_threshold,
             'max_contingency': self.max_contingency,
-            'min_confidence_threshold': self.min_confidence_threshold
+            'min_confidence_threshold': self.min_confidence_threshold,
+            'extraction_confidence': extraction_confidence,
+            'parser_source': parser_source,
+            'data_trustworthiness': data_trustworthiness
         }
 
         # Add project context if available
@@ -105,7 +117,9 @@ class BriefcaseAssembler:
     def assemble_new_asset(
         self,
         asset_data: Dict[str, Any],
-        project_context: Optional[Dict[str, Any]] = None
+        project_context: Optional[Dict[str, Any]] = None,
+        extraction_confidence: Optional[float] = None,
+        parser_source: str = "mock"
     ) -> str:
         """
         Assemble briefcase for a new asset addition.
@@ -113,11 +127,18 @@ class BriefcaseAssembler:
         Args:
             asset_data: New asset information
             project_context: Optional project context
+            extraction_confidence: Optional extraction confidence from parser (0.0-1.0)
+            parser_source: Parser used ("mock" or "dolphin")
 
         Returns:
             Formatted prompt string for Claude
         """
         logger.info(f"Assembling briefcase for new asset: {asset_data.get('object_id')}")
+
+        # Calculate data trustworthiness
+        if extraction_confidence is None:
+            extraction_confidence = 1.0  # Mock data is considered 100% confident
+        data_trustworthiness = self._calculate_trustworthiness(extraction_confidence)
 
         # Extract or provide defaults
         template_vars = {
@@ -137,7 +158,10 @@ class BriefcaseAssembler:
             'total_remaining': 0,
             'total_contingency': 0,
             'max_contingency': self.max_contingency,
-            'estimated_cost_per_unit': 0
+            'estimated_cost_per_unit': 0,
+            'extraction_confidence': extraction_confidence,
+            'parser_source': parser_source,
+            'data_trustworthiness': data_trustworthiness
         }
 
         # Update with project context if available
@@ -161,7 +185,9 @@ class BriefcaseAssembler:
     def assemble_asset_removal(
         self,
         asset_data: Dict[str, Any],
-        project_context: Optional[Dict[str, Any]] = None
+        project_context: Optional[Dict[str, Any]] = None,
+        extraction_confidence: Optional[float] = None,
+        parser_source: str = "mock"
     ) -> str:
         """
         Assemble briefcase for an asset removal.
@@ -169,11 +195,18 @@ class BriefcaseAssembler:
         Args:
             asset_data: Removed asset information
             project_context: Optional project context
+            extraction_confidence: Optional extraction confidence from parser (0.0-1.0)
+            parser_source: Parser used ("mock" or "dolphin")
 
         Returns:
             Formatted prompt string for Claude
         """
         logger.info(f"Assembling briefcase for asset removal: {asset_data.get('id')}")
+
+        # Calculate data trustworthiness
+        if extraction_confidence is None:
+            extraction_confidence = 1.0  # Mock data is considered 100% confident
+        data_trustworthiness = self._calculate_trustworthiness(extraction_confidence)
 
         lineitem = asset_data.get('lineitem', {}) or {}
 
@@ -192,7 +225,9 @@ class BriefcaseAssembler:
             'spent_to_date': lineitem.get('spent_to_date', 0),
             'project_name': 'Unknown Project',
             'floor_name': 'Unknown Floor',
-            'revision': 'Unknown'
+            'revision': 'Unknown',
+            'extraction_confidence': extraction_confidence,
+            'parser_source': parser_source
         }
 
         # Update with project context if available
@@ -232,3 +267,24 @@ class BriefcaseAssembler:
             return dt
         else:
             return 'Unknown'
+
+    def _calculate_trustworthiness(self, confidence: float) -> str:
+        """
+        Calculate data trustworthiness label based on confidence score.
+
+        Args:
+            confidence: Confidence score (0.0-1.0)
+
+        Returns:
+            Trustworthiness label
+        """
+        if confidence >= 0.95:
+            return "Very High (>= 0.95)"
+        elif confidence >= 0.85:
+            return "High (>= 0.85)"
+        elif confidence >= 0.70:
+            return "Moderate (>= 0.70)"
+        elif confidence >= 0.50:
+            return "Low (>= 0.50)"
+        else:
+            return "Very Low (< 0.50)"

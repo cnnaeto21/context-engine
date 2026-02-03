@@ -1,12 +1,14 @@
 """
-Blueprint Parser Module
+Blueprint Parser Module - Day 2: Dolphin Integration
 
 Handles parsing of construction blueprint PDFs into structured JSON format.
-For MVP: Uses mock JSON data. Future: Integrates with Reducto.ai or Unstructured.io
+Supports both mock mode (JSON) and Dolphin-v2 mode (real PDF/image parsing).
 """
 
 import json
 import logging
+import os
+import requests
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -31,6 +33,7 @@ class BlueprintAsset(BaseModel):
     unit: str = Field(..., description="Unit of measurement (sqft, linear_ft, etc.)")
     floor: str = Field(..., description="Floor identifier where asset is located")
     dimensions: Optional[Dict[str, float]] = Field(None, description="Physical dimensions")
+    confidence_score: float = Field(1.0, description="Extraction confidence (0.0-1.0)")
 
 
 class BlueprintData(BaseModel):
@@ -40,32 +43,225 @@ class BlueprintData(BaseModel):
     revision: str = Field(..., description="Blueprint revision (A, B, C, etc.)")
     date: str = Field(..., description="Blueprint date (YYYY-MM-DD)")
     assets: List[BlueprintAsset] = Field(default_factory=list, description="List of assets")
+    extraction_confidence: float = Field(1.0, description="Overall extraction confidence (0.0-1.0)")
+    parser_source: str = Field("mock", description="Parser used (mock, dolphin)")
+
+
+class DolphinClient:
+    """
+    Client for communicating with Dolphin inference service.
+
+    Handles HTTP communication with the local Dolphin FastAPI service
+    and transforms Dolphin output into BlueprintAsset objects.
+    """
+
+    def __init__(self, api_url: str = "http://localhost:8001"):
+        """
+        Initialize Dolphin client.
+
+        Args:
+            api_url: Base URL for Dolphin inference service
+        """
+        self.api_url = api_url
+        logger.info(f"DolphinClient initialized with API URL: {api_url}")
+
+    def parse_document(
+        self,
+        file_path: Path,
+        doc_type: str = "blueprint"
+    ) -> Dict[str, Any]:
+        """
+        Parse a document using Dolphin service.
+
+        Args:
+            file_path: Path to PDF or image file
+            doc_type: Document type hint (default: "blueprint")
+
+        Returns:
+            Dictionary with parsed elements and confidence scores
+
+        Raises:
+            requests.RequestException: If API call fails
+        """
+        logger.info(f"Parsing document with Dolphin: {file_path}")
+
+        try:
+            # Prepare file for upload
+            with open(file_path, 'rb') as f:
+                files = {'file': (file_path.name, f, self._get_mime_type(file_path))}
+                params = {'doc_type': doc_type}
+
+                # Make API request
+                response = requests.post(
+                    f"{self.api_url}/parse",
+                    files=files,
+                    params=params,
+                    timeout=120  # 2 minute timeout for large files
+                )
+                response.raise_for_status()
+
+            result = response.json()
+            logger.info(f"Dolphin parse complete: {len(result['parsed_elements'])} elements, "
+                       f"confidence={result['overall_confidence']:.2f}")
+
+            return result
+
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"Dolphin service not available at {self.api_url}: {e}")
+            logger.warning("Falling back to mock parsing mode")
+            return self._mock_parse_document(file_path)
+
+    def table_to_assets(
+        self,
+        table_element: Dict[str, Any],
+        blueprint_id: str,
+        floor_id: str = "Unknown"
+    ) -> List[BlueprintAsset]:
+        """
+        Convert a parsed table into BlueprintAsset objects.
+
+        Expects table to have columns like: Asset ID, Type, Material, Quantity, Unit
+
+        Args:
+            table_element: Parsed table element from Dolphin
+            blueprint_id: Blueprint identifier
+            floor_id: Floor identifier (default: "Unknown")
+
+        Returns:
+            List of BlueprintAsset objects
+        """
+        assets = []
+        table_data = table_element.get('content', {})
+        cells = table_data.get('cells', [])
+
+        if not cells:
+            logger.warning("No cells found in table")
+            return assets
+
+        # Build a grid from cells
+        max_row = max(cell['row'] for cell in cells)
+        max_col = max(cell['col'] for cell in cells)
+
+        grid = [[None for _ in range(max_col + 1)] for _ in range(max_row + 1)]
+        cell_confidences = [[0.0 for _ in range(max_col + 1)] for _ in range(max_row + 1)]
+
+        for cell in cells:
+            grid[cell['row']][cell['col']] = cell['text']
+            cell_confidences[cell['row']][cell['col']] = cell['confidence']
+
+        # Assume first row is header
+        if max_row < 1:
+            logger.warning("Table has no data rows (only header)")
+            return assets
+
+        header = grid[0]
+        logger.info(f"Table header: {header}")
+
+        # Map columns (case-insensitive)
+        col_map = {}
+        for idx, col_name in enumerate(header):
+            if col_name:
+                col_lower = col_name.lower().strip()
+                if 'asset' in col_lower or 'id' in col_lower or 'mark' in col_lower:
+                    col_map['id'] = idx
+                elif 'type' in col_lower:
+                    col_map['type'] = idx
+                elif 'material' in col_lower:
+                    col_map['material'] = idx
+                elif 'quantity' in col_lower or 'qty' in col_lower:
+                    col_map['quantity'] = idx
+                elif 'unit' in col_lower:
+                    col_map['unit'] = idx
+
+        logger.info(f"Column mapping: {col_map}")
+
+        # Parse data rows
+        for row_idx in range(1, max_row + 1):
+            row = grid[row_idx]
+            row_confidences = cell_confidences[row_idx]
+
+            # Extract fields
+            try:
+                asset_id = row[col_map.get('id', 0)] if col_map.get('id') is not None else f"Asset_{row_idx}"
+                asset_type = row[col_map.get('type', 1)] if col_map.get('type') is not None else "Unknown"
+                material = row[col_map.get('material', 2)] if col_map.get('material') is not None else "Unknown"
+                quantity_str = row[col_map.get('quantity', 3)] if col_map.get('quantity') is not None else "0"
+                unit = row[col_map.get('unit', 4)] if col_map.get('unit') is not None else "units"
+
+                # Clean quantity (remove $ and commas)
+                quantity_str = quantity_str.replace('$', '').replace(',', '').strip()
+                quantity = float(quantity_str) if quantity_str and quantity_str.replace('.', '').isdigit() else 0.0
+
+                # Calculate row confidence
+                row_confidence = sum(row_confidences) / len(row_confidences) if row_confidences else 0.85
+
+                asset = BlueprintAsset(
+                    id=asset_id,
+                    type=asset_type,
+                    material=material,
+                    quantity=quantity,
+                    unit=unit,
+                    floor=floor_id,
+                    confidence_score=row_confidence
+                )
+
+                assets.append(asset)
+                logger.debug(f"Extracted asset: {asset_id} ({asset_type}, {material}, {quantity} {unit})")
+
+            except (ValueError, IndexError, TypeError) as e:
+                logger.warning(f"Failed to parse row {row_idx}: {e}")
+                continue
+
+        logger.info(f"Extracted {len(assets)} assets from table")
+        return assets
+
+    def _get_mime_type(self, file_path: Path) -> str:
+        """Get MIME type from file extension."""
+        suffix = file_path.suffix.lower()
+        mime_types = {
+            '.pdf': 'application/pdf',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.tiff': 'image/tiff',
+            '.tif': 'image/tiff'
+        }
+        return mime_types.get(suffix, 'application/octet-stream')
 
 
 class BlueprintParser:
     """
     Parses construction blueprints into structured data.
 
-    For MVP: Reads from mock JSON files.
-    Future: Integrates with PDF parsing APIs (Reducto.ai, Unstructured.io).
+    Supports multiple parser backends:
+    - mock: Reads from mock JSON files (Day 1 MVP)
+    - dolphin: ByteDance Dolphin-v2 for real PDF/image parsing (Day 2)
     """
 
-    def __init__(self, mock_mode: bool = True):
+    def __init__(self, parser_service: str = "mock", dolphin_api_url: Optional[str] = None):
         """
         Initialize the blueprint parser.
 
         Args:
-            mock_mode: If True, reads from mock JSON files instead of parsing PDFs
+            parser_service: Parser backend to use ("mock" or "dolphin")
+            dolphin_api_url: URL for Dolphin service (required if parser_service="dolphin")
         """
-        self.mock_mode = mock_mode
-        logger.info(f"BlueprintParser initialized (mock_mode={mock_mode})")
+        self.parser_service = parser_service
+        self.dolphin_client = None
+
+        if parser_service == "dolphin":
+            if not dolphin_api_url:
+                dolphin_api_url = os.getenv("DOLPHIN_API_URL", "http://localhost:8001")
+            self.dolphin_client = DolphinClient(api_url=dolphin_api_url)
+
+        logger.info(f"BlueprintParser initialized (parser_service={parser_service})")
 
     def parse_blueprint(self, file_path: Path) -> BlueprintData:
         """
         Parse a blueprint file into structured data.
 
         Args:
-            file_path: Path to the blueprint file (PDF or JSON)
+            file_path: Path to the blueprint file (PDF, image, or JSON)
 
         Returns:
             BlueprintData object containing parsed assets
@@ -74,11 +270,12 @@ class BlueprintParser:
             FileNotFoundError: If the blueprint file doesn't exist
             ValueError: If the blueprint data is invalid
         """
-        if self.mock_mode:
+        if self.parser_service == "mock":
             return self._parse_mock_json(file_path)
+        elif self.parser_service == "dolphin":
+            return self._parse_with_dolphin(file_path)
         else:
-            # FUTURE: Implement real PDF parsing here
-            raise NotImplementedError("Real PDF parsing not yet implemented")
+            raise ValueError(f"Unknown parser service: {self.parser_service}")
 
     def _parse_mock_json(self, file_path: Path) -> BlueprintData:
         """
@@ -113,6 +310,59 @@ class BlueprintParser:
             raise ValueError(f"Invalid JSON in blueprint file: {e}")
         except Exception as e:
             raise ValueError(f"Error parsing blueprint data: {e}")
+
+    def _parse_with_dolphin(self, file_path: Path) -> BlueprintData:
+        """
+        Parse a blueprint using Dolphin service.
+
+        Args:
+            file_path: Path to PDF or image file
+
+        Returns:
+            BlueprintData object with extracted assets
+
+        Raises:
+            FileNotFoundError: If the file doesn't exist
+            requests.RequestException: If Dolphin API call fails
+        """
+        logger.info(f"Parsing blueprint with Dolphin: {file_path}")
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Blueprint file not found: {file_path}")
+
+        # Call Dolphin API
+        parse_result = self.dolphin_client.parse_document(file_path, doc_type="blueprint")
+
+        # Extract metadata
+        blueprint_id = file_path.stem  # Use filename as blueprint ID
+        extraction_confidence = parse_result.get('overall_confidence', 0.0)
+
+        # Find table elements and convert to assets
+        all_assets = []
+        for element in parse_result.get('parsed_elements', []):
+            if element['type'] == 'table':
+                assets = self.dolphin_client.table_to_assets(
+                    element,
+                    blueprint_id=blueprint_id,
+                    floor_id="Floor_1"  # Default floor, should be detected from context
+                )
+                all_assets.extend(assets)
+
+        # Create BlueprintData
+        blueprint = BlueprintData(
+            blueprint_id=blueprint_id,
+            project_id="Project_1",  # Default, should be detected from context
+            revision="Unknown",  # Should be detected from document
+            date="2024-01-01",  # Should be detected from document
+            assets=all_assets,
+            extraction_confidence=extraction_confidence,
+            parser_source="dolphin"
+        )
+
+        logger.info(f"Successfully parsed blueprint {blueprint_id} with Dolphin: "
+                   f"{len(all_assets)} assets, confidence={extraction_confidence:.2f}")
+
+        return blueprint
 
     def compare_blueprints(self, before: BlueprintData, after: BlueprintData) -> Dict[str, Any]:
         """

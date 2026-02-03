@@ -1,0 +1,24 @@
+# FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# PyTorch (CPU version for efficiency, can be overridden for GPU)
+torch==2.1.0
+torchvision==0.16.0
+
+# Transformers and model dependencies
+transformers==4.35.0
+accelerate==0.24.0
+
+# Image processing
+Pillow==10.1.0
+pdf2image==1.16.3
+
+# Document processing
+pypdf==3.17.0
+
+# Utilities
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0

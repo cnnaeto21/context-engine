@@ -63,3 +63,6 @@ dmypy.json
 
 # Jupyter Notebooks
 .ipynb_checkpoints
+
+# Markdown documentation (local only)
+*.md

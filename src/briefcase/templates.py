@@ -39,6 +39,11 @@ Change Delta: {quantity_delta:+.2f} {unit}
 Calculated Cost Impact: ${cost_impact:+.2f}
 Material Changed: {material_changed}
 
+# DATA QUALITY (from Parser)
+Extraction Confidence: {extraction_confidence:.2f} (0.0-1.0)
+Parser Source: {parser_source}
+Data Trustworthiness: {data_trustworthiness}
+
 # BUDGET CONTEXT
 Budget Line Item: {budget_code} - {budget_description}
 Allocated Budget: ${allocated_budget:.2f}
@@ -57,13 +62,20 @@ Analyze this change and provide a recommendation. Consider:
 1. Is the cost impact within acceptable thresholds?
 2. Is there sufficient budget to cover this change?
 3. Is this change consistent with typical construction modifications?
-4. What is your confidence level in the detected change?
+4. How trustworthy is the extracted data? (Extraction confidence: {extraction_confidence:.2f})
+5. What is your confidence level in the detected change?
+
+**IMPORTANT**: Your confidence_score should account for BOTH:
+- Your reasoning confidence (business logic)
+- The extraction confidence from the parser (data quality)
+
+If extraction confidence is low (<0.80), consider flagging for human review even if business logic seems sound.
 
 Provide your recommendation using the recommend_action function with these parameters:
 - action_type: "update_budget" or "flag_for_approval"
 - requires_human: true or false
-- confidence_score: 0.0 to 1.0
-- reasoning: clear explanation of your decision
+- confidence_score: 0.0 to 1.0 (combine your reasoning + extraction confidence)
+- reasoning: clear explanation of your decision, including data quality concerns if any
 """
 
     @staticmethod
@@ -82,6 +94,11 @@ Type: {asset_type}
 Material: {material}
 Quantity: {quantity} {unit}
 Floor: {floor_id}
+
+# DATA QUALITY (from Parser)
+Extraction Confidence: {extraction_confidence:.2f} (0.0-1.0)
+Parser Source: {parser_source}
+Data Trustworthiness: {data_trustworthiness}
 
 # PROJECT CONTEXT
 Project: {project_name}
@@ -107,12 +124,16 @@ Analyze this new asset and provide a recommendation. Consider:
 2. What is the likely budget impact?
 3. Which budget line item should this be allocated to?
 4. Does this indicate a significant scope change?
+5. How trustworthy is the extracted data? (Extraction confidence: {extraction_confidence:.2f})
+
+**IMPORTANT**: Your confidence_score should reflect the extraction confidence.
+If extraction confidence is low, note this in your reasoning.
 
 Provide your recommendation using the recommend_action function with these parameters:
 - action_type: "flag_for_approval" (required for new assets)
 - requires_human: true
-- confidence_score: 0.0 to 1.0
-- reasoning: clear explanation including budget allocation recommendation
+- confidence_score: 0.0 to 1.0 (should reflect extraction confidence)
+- reasoning: clear explanation including budget allocation recommendation and data quality assessment
 """
 
     @staticmethod
@@ -133,6 +154,10 @@ Quantity: {quantity} {unit}
 Cost per Unit: ${cost_per_unit:.2f}
 Total Cost: ${total_cost:.2f}
 Linked Budget Code: {budget_code}
+
+# DATA QUALITY (from Parser)
+Extraction Confidence: {extraction_confidence:.2f} (0.0-1.0)
+Parser Source: {parser_source}
 
 # BUDGET IMPACT
 Potential Cost Savings: ${cost_savings:.2f}

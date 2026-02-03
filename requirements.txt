@@ -2,7 +2,8 @@
 neo4j==5.16.0
 
 # Anthropic Claude API Client
-anthropic==0.39.0
+# Note: Upgraded from 0.39.0 to 0.77.0 during Day 1 testing
+anthropic==0.77.0
 
 # Environment Variable Management
 python-dotenv==1.0.0
